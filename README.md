@@ -1,5 +1,7 @@
 # dsh-subagent-http
 
+English | [中文](README.zh.md)
+
 HTTP subagent provider for DeepSeek Harness — delegates one-shot subagent runs to a remote HTTP endpoint and streams the reply back as `AssistantOutput` (`ContentBlock[]`).
 
 ## Install

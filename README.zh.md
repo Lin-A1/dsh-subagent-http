@@ -1,5 +1,7 @@
 # dsh-subagent-http
 
+[English](README.md) | 中文
+
 DeepSeek Harness HTTP 子智能体提供者 — 将一次性子智能体任务委派到远端 HTTP 端点，并以流式 `AssistantOutput`（`ContentBlock[]`）回传。
 
 ## 安装
