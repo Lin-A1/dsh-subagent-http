@@ -1,0 +1,6 @@
+- insert:
+    - id: dsh-subagent-http
+      name: dsh-subagent-http
+      config:
+        endpoint: http://127.0.0.1:8080/run
+        timeoutMs: 60000
