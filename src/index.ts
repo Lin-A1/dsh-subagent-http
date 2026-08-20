@@ -36,7 +36,7 @@ export interface Config {
 
 export const Config: z<Config> = z.object({
   endpoint: z.string(),
-  token: z.string(),
+  token: z.string().optional(),
   timeoutMs: z.number().step(1).min(1).default(60000),
 })
 
