@@ -8,4 +8,5 @@ export default defineConfig({
   outDir: 'lib',
   clean: true,
   sourcemap: false,
+  fixedExtension: false,
 })

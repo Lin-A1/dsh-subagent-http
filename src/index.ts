@@ -35,8 +35,8 @@ export interface Config {
 }
 
 export const Config: z<Config> = z.object({
-  endpoint: z.string().describe('HTTP endpoint for POST {task, session}'),
-  token: z.string().optional(),
+  endpoint: z.string(),
+  token: z.string(),
   timeoutMs: z.number().step(1).min(1).default(60000),
 })
 
