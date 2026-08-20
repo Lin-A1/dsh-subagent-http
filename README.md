@@ -17,7 +17,7 @@ dsh plugin --profile <name> add github:<owner>/dsh-subagent-http
 # then re-run the add
 
 # from npm (prebuilt)
-dsh plugin add dsh-subagent-http
+dsh plugin --profile <name> add dsh-subagent-http
 ```
 
 Verify:
