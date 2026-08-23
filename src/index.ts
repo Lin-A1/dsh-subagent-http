@@ -18,7 +18,7 @@ import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 
 export const name = 'dsh-subagent-http'
-export const inject = ['subagent']
+export const inject = ['subagents']
 
 // ---------------------------------------------------------------------------
 // Config
@@ -36,7 +36,7 @@ export interface Config {
 
 export const Config: z<Config> = z.object({
   endpoint: z.string(),
-  token: z.string().optional(),
+  token: z.string().required(false),
   timeoutMs: z.number().step(1).min(1).default(60000),
 })
 
@@ -318,8 +318,8 @@ class HttpSubagentProvider implements SubagentProvider {
 // ---------------------------------------------------------------------------
 
 /**
- * Register the HTTP subagent provider on `ctx.subagent` (with `ctx.subagents`
- * fallback for the real harness seam).
+ * Register the HTTP subagent provider on `ctx.subagents` (real seam
+ * `super(ctx,'subagents')`, with `ctx.subagent` fallback for compatibility).
  */
 export function apply(ctx: Context, config: Config): void {
   const resolved = config as ResolvedConfig
@@ -336,14 +336,14 @@ export function apply(ctx: Context, config: Config): void {
     throw new Error('dsh-subagent-http: timeoutMs must be a positive finite number')
   }
 
-  // The task spec says `ctx.subagent`; the real seam is `ctx.subagents`.
-  // Support both via fallback so the plugin works against the actual harness
-  // while still satisfying the spec's `inject = ['subagent']`.
+  // inject = ['subagents'] matches the real seam `super(ctx,'subagents')`;
+  // keep `ctx.subagent` / `ctx.get('subagent')` fallback for compatibility
+  // with older specs / aliases.
   const getRuntime = (): { registerProvider: (p: SubagentProvider) => () => void } => {
     const anyCtx = ctx as unknown as Record<string, unknown>
     const runtime =
-      (anyCtx['subagent'] as { registerProvider?: (p: SubagentProvider) => () => void } | undefined) ??
       (anyCtx['subagents'] as { registerProvider?: (p: SubagentProvider) => () => void } | undefined) ??
+      (anyCtx['subagent'] as { registerProvider?: (p: SubagentProvider) => () => void } | undefined) ??
       (typeof (ctx as unknown as { get?: (k: string) => unknown }).get === 'function'
         ? ((ctx as unknown as { get: (k: string) => unknown }).get('subagents') as { registerProvider?: (p: SubagentProvider) => () => void } | undefined) ??
           ((ctx as unknown as { get: (k: string) => unknown }).get('subagent') as { registerProvider?: (p: SubagentProvider) => () => void } | undefined)

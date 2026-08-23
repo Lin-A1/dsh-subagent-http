@@ -4,42 +4,9 @@
 
 DeepSeek Harness HTTP 子智能体提供者 — 将一次性子智能体任务委派到远端 HTTP 端点，并以流式 `AssistantOutput`（`ContentBlock[]`）回传。
 
-## 安装
+## 能力
 
-```sh
-# 本地（无需 allowlist）
-dsh plugin --profile <name> add ./plugins/subagent/dsh-subagent-http
-
-# GitHub 源码（需 allowBuilds）
-dsh plugin --profile <name> add github:<owner>/dsh-subagent-http
-# 首次会打印精确的 allow key，复制到 $DSH_HOME/profiles/<name>/pnpm-workspace.yaml:
-# allowBuilds:
-#   dsh-subagent-http: true
-
-# npm 预构建
-dsh plugin --profile <name> add dsh-subagent-http
-```
-
-验证：
-
-```sh
-dsh --profile <name> --dump-config  # 显示 "# == dsh-subagent-http" 层
-```
-
-## 工作原理
-
-在 `ctx.subagents`（规范别名 `ctx.subagent`）注册 `SubagentProvider` 名为 `http`，每次 `start()` 向 `endpoint` `POST { task, session }`：
-
-- `task`: 由 `request.prompt`（`ContentBlock[]`）拼接的文本
-- `session`: `{ id, cwd, label, descriptor, maxDepth?, outputSchema? }`
-
-请求头：`content-type: application/json`、`accept: text/event-stream, ...`，有 `token` 时带 `Authorization: Bearer <token>`。
-
-流式处理（对齐 `packages/subagent/subagent/src/assistant-output.ts:AssistantOutputFold`）：
-- `application/json` 非流：解析 `{ content | message.content | output | result }` 为 `ContentBlock[]`
-- `text/event-stream` / `x-ndjson` / `text/plain`：按行 `data:` 解析 `{ text | delta | chunk.text }` 并折叠
-
-`result` 永不 `reject`，子失败以 `stopReason: 'error'` 返回，父 `signal` 中断为 `aborted`，`dispose()` 中断 `fetch`。
+`capabilities = { outputSchema:false, depthLimit:false, toolFilter:false, persona:false }`，`inheritsParentContext = false`，与 `subagent-acp` 等外置提供者一致。在 `ctx.subagents`（规范别名 `ctx.subagent`）注册 `http` 提供方，每次 `start()` 向 `endpoint` `POST { task, session }` 并按 `AssistantOutputFold` 折叠流式块。
 
 ## 配置
 
@@ -60,10 +27,52 @@ dsh --profile <name> --dump-config  # 显示 "# == dsh-subagent-http" 层
         timeoutMs: 60000
 ```
 
-## 能力
+`endpoint` 须为合法 `http(s)` URL，`timeoutMs` 须 `>=1`。
 
-`capabilities = { outputSchema:false, depthLimit:false, toolFilter:false, persona:false }`，`inheritsParentContext = false`，与 `subagent-acp` 等外置提供者一致。
+## 事件
+
+`ctx.subagents.registerProvider` 触发生命周期事件 `subagent/provider-added` / `provider-removed`（effect 作用域）。运行期仍通过 `LifecycleEmitter` 发出 `subagent/start` / `subagent/end`。
+
+## 安装
+
+使用全新 profile `tmp` 验证（AGENTS.md:112），三条路径均通过 `prepare` 构建 `lib/`，无警告，`dsh --dump-config` 可见层。
+
+```sh
+# GitHub（拉源码，需首次 allowBuilds）
+dsh plugin --profile tmp add github:Lin-A1/dsh-subagent-http
+# 可信安装建议 pin commit
+dsh plugin --profile tmp add github:Lin-A1/dsh-subagent-http#<sha>
+
+# npm（已含 lib/，无需 allowBuilds）
+dsh plugin --profile tmp add dsh-subagent-http
+
+# 本地（从 dsh-hub 根执行）
+dsh plugin --profile tmp add ./plugins/subagent/dsh-subagent-http
+```
+
+首次 GitHub 安装会打印精确的 `allowBuilds` key，复制到 `$DSH_HOME/profiles/tmp/pnpm-workspace.yaml`：
+
+```yaml
+allowBuilds:
+  dsh-subagent-http: true
+```
+
+后重跑 `add`。
+
+验证：
+
+```sh
+dsh --profile tmp --dump-config  # 须包含 "# == dsh-subagent-http" 层
+```
+
+## 版本
+
+- deepseek-harness `0.1.0-rc.8`（`^0.1.0-rc.7` peer，亦兼容 `0.1.1-rc.2`）
+- Node.js `>=22`
+- `@deepseek-ai/cordis ^4.0.1`，`@deepseek-ai/schemastery ^3.18.1`
 
 ## 上游跟踪
 
-缝参考：`deepseek-harness/packages/subagent/subagent/src/index.ts:SubagentRuntime`。版本 `0.1.0-rc.8`，Node `>=22`。
+- 缝：`deepseek-harness/packages/subagent/subagent`
+- 插件仓库：`https://github.com/Lin-A1/dsh-subagent-http`（`master`，`dsh-hub` 中 `plugins/subagent/dsh-subagent-http` 子模块）
+- Harness 上游：`https://github.com/deepseek-ai/deepseek-harness` `branch = master`

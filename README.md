@@ -4,47 +4,13 @@ English | [中文](README.zh.md)
 
 HTTP subagent provider for DeepSeek Harness — delegates one-shot subagent runs to a remote HTTP endpoint and streams the reply back as `AssistantOutput` (`ContentBlock[]`).
 
-## Install
+## Capability
 
-```sh
-# from local checkout (no allowlist step)
-dsh plugin --profile <name> add ./plugins/subagent/dsh-subagent-http
+`capabilities = { outputSchema:false, depthLimit:false, toolFilter:false, persona:false }`, `inheritsParentContext = false` — an HTTP child starts fresh and does not inherit parent context or tool filters, consistent with out-of-process providers (`subagent-acp`, `subagent-fork-in-process`).
 
-# from GitHub (sources, needs allowBuilds)
-dsh plugin --profile <name> add github:<owner>/dsh-subagent-http
-# first run prints the exact allow key — copy it into
-# $DSH_HOME/profiles/<name>/pnpm-workspace.yaml:
-# allowBuilds:
-#   dsh-subagent-http: true
-# then re-run the add
+The plugin registers a `SubagentProvider` named `http` on `ctx.subagents` (spec alias `ctx.subagent`). Each `start()` POSTs `{ task, session }` to `endpoint` and folds streaming chunks via `AssistantOutputFold` semantics.
 
-# from npm (prebuilt)
-dsh plugin --profile <name> add dsh-subagent-http
-```
-
-Verify:
-
-```sh
-dsh --profile <name> --dump-config  # shows "# == dsh-subagent-http" layer
-```
-
-## How it works
-
-The plugin registers a `SubagentProvider` named `http` on `ctx.subagents` (spec alias `ctx.subagent`). Each `start()` POSTs `{ task, session }` to `endpoint`:
-
-- `task`: text joined from `request.prompt` (`ContentBlock[]`) plus `prompt` (raw blocks)
-- `session`: `{ id, cwd, label, descriptor, maxDepth?, outputSchema? }` derived from the parent agent's session
-
-Headers: `content-type: application/json`, `accept: text/event-stream, application/x-ndjson, application/json, text/plain`, and `Authorization: Bearer <token>` when `token` is set.
-
-Streaming response handling (ports `packages/subagent/subagent/src/assistant-output.ts:AssistantOutputFold` semantics):
-
-- `application/json` (non-stream): parses `{ content | message.content | output | result }` as `ContentBlock[]`, else `{ text | output_text | result_text | "<raw>" }` as fallback text; honors `stopReason`/`diagnostic` when present.
-- `text/event-stream` / `x-ndjson` / `text/plain` streaming: incremental `ReadableStream` reader split on `\n`; each `data: <json>` or JSON line with `{ text | delta | chunk.text | content | message.content | output }` is folded; plain-text chunks are pushed as `text` deltas. Folding keeps the last non-empty message and otherwise joins text deltas — identical to `AssistantOutputFold.collect()`.
-
-Result settlement: `result` never rejects on child failure — it resolves with `stopReason: 'error'` and a `diagnostic` (≤4096 bytes). Parent `signal` abort yields `stopReason: 'aborted'`; timeout or fetch failure yields `stopReason: 'error'`. `dispose()` aborts the fetch and awaits settlement.
-
-## Configuration
+## Config
 
 | Key | Type | Default | Meaning |
 |-----|------|---------|---------|
@@ -65,7 +31,54 @@ Result settlement: `result` never rejects on child failure — it resolves with 
 
 `endpoint` must be a valid `http:`/`https:` URL; `timeoutMs` must be `>=1` (validated at `apply`, loud fail).
 
-## Endpoint contract
+## Events
+
+Provider registration emits `subagent/provider-added` / `subagent/provider-removed` via `ctx.subagents.registerProvider` (effect-scoped). Run lifecycle still emits `subagent/start` / `subagent/end` through the seam's `LifecycleEmitter`. No custom session events.
+
+## Install
+
+Verified with a fresh profile `tmp` (AGENTS.md:112). All three paths build `lib/` via `prepare`, emit no `dsh plugin` warning, and appear in `dsh --dump-config`.
+
+```sh
+# GitHub (source, needs allowBuilds on first install)
+dsh plugin --profile tmp add github:Lin-A1/dsh-subagent-http
+# pin to a commit for trusted installs
+dsh plugin --profile tmp add github:Lin-A1/dsh-subagent-http#<sha>
+
+# npm (prebuilt lib/, no allowBuilds)
+dsh plugin --profile tmp add dsh-subagent-http
+
+# local (from dsh-hub root)
+dsh plugin --profile tmp add ./plugins/subagent/dsh-subagent-http
+```
+
+First GitHub install prints the exact `allowBuilds` key. Copy it into `$DSH_HOME/profiles/tmp/pnpm-workspace.yaml`:
+
+```yaml
+allowBuilds:
+  dsh-subagent-http: true
+```
+
+then re-run the `add`.
+
+Verify:
+
+```sh
+dsh --profile tmp --dump-config  # must contain "# == dsh-subagent-http" layer
+```
+
+### How it works
+
+Headers: `content-type: application/json`, `accept: text/event-stream, application/x-ndjson, application/json, text/plain`, and `Authorization: Bearer <token>` when `token` is set.
+
+Streaming handling (ports `packages/subagent/subagent/src/assistant-output.ts:AssistantOutputFold`):
+
+- `application/json` (non-stream): parses `{ content | message.content | output | result }` as `ContentBlock[]`, else `{ text | output_text | result_text | "<raw>" }` as fallback text; honors `stopReason`/`diagnostic`.
+- `text/event-stream` / `x-ndjson` / `text/plain` streaming: incremental `ReadableStream` reader split on `\n`; each `data: <json>` or JSON line with `{ text | delta | chunk.text | content | message.content | output }` is folded; plain-text chunks are pushed as `text` deltas.
+
+Result settlement: `result` never rejects on child failure — it resolves with `stopReason: 'error'` and a `diagnostic` (≤4096 bytes). Parent `signal` abort yields `stopReason: 'aborted'`; timeout or fetch failure yields `stopReason: 'error'`. `dispose()` aborts the fetch and awaits settlement.
+
+### Endpoint contract
 
 Request:
 
@@ -84,20 +97,16 @@ Accepted response shapes (all streamed or single-shot):
 - SSE: `data: {"text":"hello "}\ndata: {"text":"world"}\n`
 - NDJSON: `{"delta":"hello "}\n{"delta":"world"}\n`
 
-## Capability
+## Versions
 
-`capabilities = { outputSchema:false, depthLimit:false, toolFilter:false, persona:false }`, `inheritsParentContext = false` — an HTTP child starts fresh and does not inherit parent context or tool filters, consistent with out-of-process providers (`subagent-acp`, `subagent-fork-in-process`).
-
-## Events
-
-Provider registration emits `subagent/provider-added` / `subagent/provider-removed` via `ctx.subagents.registerProvider` (effect-scoped). Run lifecycle still emits `subagent/start` / `subagent/end` through the seam's `LifecycleEmitter`.
+- deepseek-harness `0.1.0-rc.8` (also `^0.1.0-rc.7` peer range, compatible with `0.1.1-rc.2`)
+- Node `>=22`
+- `@deepseek-ai/cordis ^4.0.1`, `@deepseek-ai/schemastery ^3.18.1`
+- `@deepseek-ai/dsh-subagent ^0.1.0-rc.7` (peer+dev)
 
 ## Upstream tracker
 
-Seam reference: `deepseek-harness/packages/subagent/subagent/src/index.ts:SubagentRuntime` + `types.ts:SubagentProvider` + `assistant-output.ts:AssistantOutputFold`. Report provider issues to this repository; report seam issues to `deepseek-ai/deepseek-harness`.
-
-## Versions
-
-- deepseek-harness `0.1.0-rc.8` (also `^0.1.0-rc.7` peer range)
-- Node `>=22`
-- `@deepseek-ai/cordis ^4.0.1`, `@deepseek-ai/schemastery ^3.18.1`
+- Seam: `deepseek-harness/packages/subagent/subagent/src/index.ts:SubagentRuntime` + `types.ts:SubagentProvider` + `assistant-output.ts:AssistantOutputFold`.
+- Plugin repo: `https://github.com/Lin-A1/dsh-subagent-http` (`master`, submodule `plugins/subagent/dsh-subagent-http` in `dsh-hub`).
+- Harness upstream: `https://github.com/deepseek-ai/deepseek-harness` `branch = master`.
+- Example: `packages/subagent/subagent-acp` and `subagent-fork-in-process` for isolated provider reference.

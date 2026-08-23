@@ -5,7 +5,7 @@ Plugin-local conventions for the HTTP subagent provider.
 ## Scope
 
 - Runtime: Node `>=22`, host fiber only. No web `lib/client.js` face.
-- Loader contract: named exports `name` / `inject` / `Config` / `apply` only — no `default` export. `inject = ['subagent']` (spec alias; runtime resolves `ctx.subagent ?? ctx.subagents ?? ctx.get('subagents')` so it works against the real `subagents` seam). Registrations are effects: `ctx.effect` → `runtime.registerProvider`; dispose unregisters.
+- Loader contract: named exports `name` / `inject` / `Config` / `apply` only — no `default` export. `inject = ['subagents']` (matches real seam `super(ctx,'subagents')`; runtime resolves `ctx.subagents ?? ctx.subagent ?? ctx.get('subagents') ?? ctx.get('subagent')` fallback for compatibility). Registrations are effects: `ctx.effect` → `runtime.registerProvider`; dispose unregisters.
 - Peer correctness: `@deepseek-ai/cordis` in **both** `peerDependencies` and `devDependencies` same range (`^4.0.1`); `@deepseek-ai/dsh-subagent` peer+dev for the `SubagentProvider` type; `@deepseek-ai/schemastery` in `dependencies`. Duplicate Cordis check via single instance.
 
 ## Repository shape invariants
@@ -21,7 +21,7 @@ Plugin-local conventions for the HTTP subagent provider.
 - `start()` mints remote `SessionId` as `${parent.session.id}::http::${ts36}-${rand}`; `localAgent: undefined` (remote). `result` is the fetch settlement promise; `dispose()` aborts the `AbortController` (composed from `request.signal` + `timeoutMs`) and awaits `result`.
 - POST `endpoint` `{ task, session }` where `task = blocksToText(prompt)` and `session = { id, cwd, label, descriptor }`. Headers include `Authorization: Bearer <token>` when set. Timeout via `setTimeout` → `abort(TimeoutError)`, parent abort forwarded.
 - Streaming fold mirrors `assistant-output.ts:AssistantOutputFold`: `StreamFold` keeps `message` last-wins and `partial` text join; `foldChunk` handles SSE `data:`, ndjson JSON lines (`text`/`delta`/`chunk.text`/`content`/`message.content`/`output`) and plain-text fallback. Non-stream JSON shortcut parses `content`/`text`/`stopReason`/`diagnostic`. Output caps follow seam: `diagnostic` sliced to 4096 bytes; `result` never rejects on child error (`stopReason: 'error'`), parent abort is `aborted`.
-- Validation at `apply` (loud fail): `endpoint` non-empty valid `http(s)` URL, `timeoutMs` finite `>=1`. Runtime availability checked via `ctx.subagent ?? ctx.subagents ?? ctx.get('subagents')`.
+- Validation at `apply` (loud fail): `endpoint` non-empty valid `http(s)` URL, `timeoutMs` finite `>=1`. Runtime availability checked via `ctx.subagents ?? ctx.subagent ?? ctx.get('subagents') ?? ctx.get('subagent')` (real seam first, alias fallback).
 
 ## Testing & verification before hub PR
 
