@@ -149,6 +149,7 @@ function foldChunk(fold: StreamFold, raw: string): void {
 class HttpSubagentProvider implements SubagentProvider {
   readonly name: string
   readonly capabilities: SubagentCapabilities = {
+    agentOptions: false,
     outputSchema: false,
     depthLimit: false,
     toolFilter: false,
