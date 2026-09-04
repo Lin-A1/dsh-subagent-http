@@ -1,6 +1,6 @@
 {
   "name": "dsh-subagent-http",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "HTTP subagent provider for DeepSeek Harness — delegates subagent runs to a remote HTTP endpoint with streaming AssistantOutput",
   "license": "MIT",
   "private": true,
@@ -20,6 +20,14 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "compatibility": {
+      "dsh": ">=0.1.2-alpha.4 <0.2.0",
+      "dshReleases": {
+        "0.1.2-alpha.4": "compatible",
+        "0.1.2-alpha.5": "compatible",
+        "0.1.2-rc.1": "compatible"
+      }
     }
   },
   "engines": {
